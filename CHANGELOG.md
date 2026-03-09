@@ -1,5 +1,6 @@
 # CHANGELOG
 
+- [2026-03-10 02:41] FIX: 修复 CLI 在标准流 encoding 缺失时的启动崩溃，并补充 uv 虚拟环境回归测试入口 (Files: aivectormemory/__main__.py, pyproject.toml, uv.lock, tests/test_main_stdio.py, CHANGELOG.md)
 - [2026-03-10 02:20] FIX: 收紧 onnxruntime 版本上限，修复 CPython 3.10 在 uv sync 下无法解依赖的问题 (Files: pyproject.toml, CHANGELOG.md)
 - [2026-03-10 02:09] FIX: 重建桌面端运行时切换链路并修复 issue/memory 标签同步，避免启动后空指针与标签索引错乱 (Files: desktop/runtime.go, desktop/app.go, desktop/app_test.go, desktop/internal/webserver/launcher.go, aivectormemory/db/base.py, aivectormemory/web/routes/issues.py, aivectormemory/web/routes/memories.py, tests/test_issue_routes.py, docs/ARCHITECTURE.zh-CN.md)
 - [2026-03-10 00:20] FIX: 修复桌面端 Issue 创建/详情/归档标识错位，并补齐 mac Intel 发布矩阵 (Files: desktop/app.go, desktop/internal/db/issues.go, desktop/internal/db/db_test.go, desktop/frontend/src/composables/useIssues.ts, desktop/frontend/src/views/IssuesView.vue, .github/workflows/release.yml, docs/MACOS-INTEL-BUILD.zh-CN.md)
