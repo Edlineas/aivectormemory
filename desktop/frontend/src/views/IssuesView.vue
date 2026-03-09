@@ -64,7 +64,7 @@ function openCreate() {
 // Edit
 async function openEdit(issue: any) {
   try {
-    const detail = await getDetail(issue.issue_number)
+    const detail = await getDetail(issue.id)
     editIssue.value = detail
     editMode.value = 'edit'
     editModalShow.value = true
@@ -75,13 +75,13 @@ async function onSave(data: any) {
   try {
     if (editMode.value === 'create') {
       const result = await create(data.title, data.content, 'pending', data.tags || [], 0)
-      if (result?.duplicate) {
+      if (result?.deduplicated || result?.duplicate) {
         window.__toast?.show(t('issueDuplicated'), 'warning')
         return
       }
       window.__toast?.show(t('issueCreated'), 'success')
     } else if (editIssue.value) {
-      await updateFull(editIssue.value.issue_number, data)
+      await updateFull(editIssue.value.id, data)
       window.__toast?.show(t('issueUpdated'), 'success')
     }
     editModalShow.value = false
@@ -109,10 +109,10 @@ async function doConfirm() {
   if (!confirmTarget.value) return
   try {
     if (confirmAction.value === 'archive') {
-      await archive(confirmTarget.value.issue_number)
+      await archive(confirmTarget.value.id)
       window.__toast?.show(t('issueArchived'), 'success')
     } else {
-      await remove(confirmTarget.value.issue_number, confirmTarget.value.status === 'archived')
+      await remove(confirmTarget.value.id, confirmTarget.value.status === 'archived')
       window.__toast?.show(t('issueDeleted'), 'success')
     }
     confirmModalShow.value = false
@@ -125,7 +125,7 @@ async function doConfirm() {
 // View archived
 async function openView(issue: any) {
   try {
-    viewIssue.value = await getDetail(issue.issue_number)
+    viewIssue.value = await getDetail(issue.id)
     viewModalShow.value = true
   } catch (e) { showError(e) }
 }

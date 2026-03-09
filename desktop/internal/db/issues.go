@@ -164,16 +164,33 @@ func (d *DB) GetIssueDetail(id int, projectDir string) (*Issue, error) {
 	if len(issues) > 0 {
 		return &issues[0], nil
 	}
+
+	archivedCols := "id, project_dir, issue_number, date, title, content, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, 'archived' as status, created_at, archived_at as updated_at"
+	archivedRows, err := d.Query(
+		fmt.Sprintf("SELECT %s FROM issues_archive WHERE id=? AND project_dir=?", archivedCols),
+		id, projectDir,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer archivedRows.Close()
+	issues = scanIssues(archivedRows)
+	if len(issues) > 0 {
+		return &issues[0], nil
+	}
+
 	return nil, fmt.Errorf("issue not found: %d", id)
 }
 
-func (d *DB) CreateIssue(projectDir, date, title, content string, tags []string, parentID int) (*Issue, bool, error) {
+func (d *DB) CreateIssue(projectDir, title, content, status string, tags []string, parentID int) (*Issue, bool, error) {
 	if title == "" {
 		return nil, false, fmt.Errorf("title required")
 	}
-	if date == "" {
-		date = time.Now().Format("2006-01-02")
+	if status == "" {
+		status = "pending"
 	}
+
+	date := time.Now().Format("2006-01-02")
 	now := time.Now().Format(time.RFC3339)
 
 	// Dedup check
@@ -188,8 +205,8 @@ func (d *DB) CreateIssue(projectDir, date, title, content string, tags []string,
 	d.QueryRow("SELECT COALESCE(MAX(issue_number),0) FROM issues WHERE project_dir=?", projectDir).Scan(&maxNum)
 
 	result, err := d.Exec(
-		"INSERT INTO issues (project_dir, issue_number, date, title, status, content, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, created_at, updated_at) VALUES (?,?,?,?,'pending',?,'','','','','[]','','','',?,?,?)",
-		projectDir, maxNum+1, date, title, content, parentID, now, now)
+		"INSERT INTO issues (project_dir, issue_number, date, title, status, content, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, created_at, updated_at) VALUES (?,?,?,?,?,?,'','','','','[]','','','',?,?,?)",
+		projectDir, maxNum+1, date, title, status, content, parentID, now, now)
 	if err != nil {
 		return nil, false, err
 	}

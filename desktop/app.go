@@ -228,19 +228,24 @@ func (a *App) GetIssueDetail(id int, projectDir string) (*db.Issue, error) {
 	return a.database.GetIssueDetail(id, projectDir)
 }
 
-func (a *App) CreateIssue(projectDir, date, title, content string, tags []string, parentID int) (map[string]interface{}, error) {
-	issue, dedup, err := a.database.CreateIssue(projectDir, date, title, content, tags, parentID)
+func (a *App) CreateIssue(projectDir, title, content, status string, tags []string, parentID int) (map[string]interface{}, error) {
+	issue, dedup, err := a.database.CreateIssue(projectDir, title, content, status, tags, parentID)
 	if err != nil {
 		return nil, err
 	}
 	if dedup {
-		return map[string]interface{}{"deduplicated": true, "title": title}, nil
+		return map[string]interface{}{
+			"deduplicated": true,
+			"duplicate":    true,
+			"title":        title,
+		}, nil
 	}
 	result := map[string]interface{}{
 		"id":           issue.ID,
 		"issue_number": issue.IssueNumber,
 		"title":        issue.Title,
 		"deduplicated": false,
+		"duplicate":    false,
 	}
 	return result, nil
 }

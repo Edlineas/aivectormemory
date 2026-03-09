@@ -79,6 +79,15 @@ OUTPUT_DMG="$PWD/build/bin/AIVectorMemory-custom-intel.dmg" TARGET_ARCH=amd64 ./
 
 也就是说，应用升级与用户数据目录是分离的。
 
+## 4.1 GitHub Release 产物
+
+发布链路应同时提供以下 macOS 安装包：
+
+- `macos-arm64`
+- `macos-amd64`
+
+桌面端升级检测会优先为当前机器选择匹配架构的安装包；Intel Mac 会优先命中 `macos-amd64` 或 `darwin-amd64` 产物。
+
 ## 5. 桌面端升级检测说明
 
 桌面端项目选择页会调用 `CheckUpgrade()`：
