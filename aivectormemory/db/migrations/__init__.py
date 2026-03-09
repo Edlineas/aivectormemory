@@ -8,6 +8,7 @@ from .v07 import upgrade as v07
 from .v08 import upgrade as v08
 from .v09 import upgrade as v09
 from .v10 import upgrade as v10
+from .v11 import upgrade as v11
 
 MIGRATIONS = {
     1: v01,
@@ -20,4 +21,5 @@ MIGRATIONS = {
     8: v08,
     9: v09,
     10: v10,
+    11: v11,
 }
