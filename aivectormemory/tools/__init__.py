@@ -6,7 +6,7 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "content": {"type": "string", "description": "记忆内容，Markdown 格式。命令类须含完整可执行命令，流程类须含具体步骤，禁止模糊缩写"},
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "标签列表"},
+                "tags": {"oneOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}], "description": "标签列表（数组或逗号分隔字符串）"},
                 "scope": {"type": "string", "enum": ["user", "project"], "default": "project", "description": "作用域"}
             },
             "required": ["content", "tags"]
@@ -20,7 +20,7 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "query": {"type": "string", "description": "搜索内容（语义搜索，可选）"},
                 "scope": {"type": "string", "enum": ["user", "project", "all"], "default": "all"},
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "按标签过滤。query+tags 时默认 OR 匹配（任一标签命中即可），仅 tags 时默认 AND 匹配（精确分类浏览）"},
+                "tags": {"oneOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}], "description": "按标签过滤。query+tags 时默认 OR 匹配（任一标签命中即可），仅 tags 时默认 AND 匹配（精确分类浏览）"},
                 "tags_mode": {"type": "string", "enum": ["any", "all"], "description": "标签匹配模式：any=任一匹配，all=全部匹配。默认智能选择（query+tags→any，仅tags→all）"},
                 "top_k": {"type": "integer", "default": 5, "description": "返回结果数量"},
                 "source": {"type": "string", "enum": ["manual", "experience"], "description": "按来源过滤：manual=项目知识, experience=归档经验。不传则不过滤"},
@@ -36,7 +36,7 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "memory_id": {"type": "string", "description": "单个记忆 ID"},
                 "memory_ids": {"type": "array", "items": {"type": "string"}, "description": "多个记忆 ID"},
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "按标签批量删除，删除所有匹配标签的记忆"},
+                "tags": {"oneOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}], "description": "按标签批量删除，删除所有匹配标签的记忆"},
                 "scope": {"type": "string", "enum": ["user", "project", "all"], "default": "all", "description": "配合 tags 使用，限定删除范围"}
             }
         }
@@ -151,8 +151,8 @@ TOOL_DEFINITIONS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "preferences": {"type": "array", "items": {"type": "string"}, "description": "用户表达的技术偏好（固定 scope=user，跨项目通用）"},
-                "extra_tags": {"type": "array", "items": {"type": "string"}, "description": "额外标签"}
+                "preferences": {"oneOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}], "description": "用户表达的技术偏好（固定 scope=user，跨项目通用）"},
+                "extra_tags": {"oneOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}], "description": "额外标签"}
             }
         }
     }
