@@ -713,7 +713,7 @@ window.editIssueAction = async (issueNum) => {
       ${extraHtml}
     </details>
     <div class="form-field"><label class="form-label">${t('issueTags')}</label>
-      <input class="form-input" id="edit-issue-tags" value=""></div>
+      <input class="form-input" id="edit-issue-tags" value="${escHtml(Array.isArray(issue.tags) ? issue.tags.join(', ') : '')}"></div>
   `, async () => {
     const title = $('#edit-issue-title').value.trim();
     if (!title) return;

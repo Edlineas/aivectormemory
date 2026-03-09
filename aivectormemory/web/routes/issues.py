@@ -40,7 +40,7 @@ def put_issue(handler, cm, iid, pdir):
         return {"error": "not found"}
     fields = {k: body[k] for k in ("title", "status", "content",
               "description", "investigation", "root_cause", "solution",
-              "files_changed", "test_result", "notes", "feature_id") if k in body}
+              "files_changed", "test_result", "notes", "feature_id", "tags") if k in body}
     result = repo.update(iid, **fields)
     if not result:
         return {"error": "not found"}
@@ -71,7 +71,7 @@ def post_issue(handler, cm, pdir):
 
     repo = IssueRepo(cm.conn, pdir)
     parent_id = body.get("parent_id", 0)
-    result = repo.create(d, title, content, parent_id=parent_id)
+    result = repo.create(d, title, content, tags=tags, parent_id=parent_id)
     if result.get("deduplicated"):
         return result
 

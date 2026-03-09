@@ -1,9 +1,12 @@
 package db
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func setupTestDB(t *testing.T) *DB {
@@ -22,8 +25,8 @@ func setupTestDB(t *testing.T) *DB {
 		"CREATE TABLE IF NOT EXISTS memories (id TEXT PRIMARY KEY, content TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '[]', scope TEXT NOT NULL DEFAULT 'project', source TEXT NOT NULL DEFAULT 'manual', project_dir TEXT NOT NULL DEFAULT '', session_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
 		"CREATE TABLE IF NOT EXISTS user_memories (id TEXT PRIMARY KEY, content TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '[]', source TEXT NOT NULL DEFAULT 'manual', session_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
 		"CREATE TABLE IF NOT EXISTS session_state (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', is_blocked INTEGER NOT NULL DEFAULT 0, block_reason TEXT NOT NULL DEFAULT '', next_step TEXT NOT NULL DEFAULT '', current_task TEXT NOT NULL DEFAULT '', progress TEXT NOT NULL DEFAULT '[]', recent_changes TEXT NOT NULL DEFAULT '[]', pending TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL, UNIQUE(project_dir))",
-		"CREATE TABLE IF NOT EXISTS issues (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', issue_number INTEGER NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', content TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', investigation TEXT NOT NULL DEFAULT '', root_cause TEXT NOT NULL DEFAULT '', solution TEXT NOT NULL DEFAULT '', files_changed TEXT NOT NULL DEFAULT '[]', test_result TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', parent_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
-		"CREATE TABLE IF NOT EXISTS issues_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', issue_number INTEGER NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', investigation TEXT NOT NULL DEFAULT '', root_cause TEXT NOT NULL DEFAULT '', solution TEXT NOT NULL DEFAULT '', files_changed TEXT NOT NULL DEFAULT '[]', test_result TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', parent_id INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT '', original_issue_id INTEGER NOT NULL DEFAULT 0, archived_at TEXT NOT NULL, created_at TEXT NOT NULL)",
+		"CREATE TABLE IF NOT EXISTS issues (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', issue_number INTEGER NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', content TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]', description TEXT NOT NULL DEFAULT '', investigation TEXT NOT NULL DEFAULT '', root_cause TEXT NOT NULL DEFAULT '', solution TEXT NOT NULL DEFAULT '', files_changed TEXT NOT NULL DEFAULT '[]', test_result TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', parent_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+		"CREATE TABLE IF NOT EXISTS issues_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', issue_number INTEGER NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]', description TEXT NOT NULL DEFAULT '', investigation TEXT NOT NULL DEFAULT '', root_cause TEXT NOT NULL DEFAULT '', solution TEXT NOT NULL DEFAULT '', files_changed TEXT NOT NULL DEFAULT '[]', test_result TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', parent_id INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT '', original_issue_id INTEGER NOT NULL DEFAULT 0, archived_at TEXT NOT NULL, created_at TEXT NOT NULL)",
 		"CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', sort_order INTEGER NOT NULL DEFAULT 0, parent_id INTEGER NOT NULL DEFAULT 0, task_type TEXT NOT NULL DEFAULT 'manual', metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
 		"CREATE TABLE IF NOT EXISTS tasks_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', sort_order INTEGER NOT NULL DEFAULT 0, parent_id INTEGER NOT NULL DEFAULT 0, task_type TEXT NOT NULL DEFAULT 'manual', metadata TEXT NOT NULL DEFAULT '{}', original_task_id INTEGER NOT NULL DEFAULT 0, archived_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
 		"CREATE TABLE IF NOT EXISTS memory_tags (memory_id TEXT NOT NULL, tag TEXT NOT NULL, PRIMARY KEY (memory_id, tag))",
@@ -87,7 +90,7 @@ func TestIssuesCRUD(t *testing.T) {
 	d.AddProject(pdir)
 
 	// Create
-	issue, dedup, err := d.CreateIssue(pdir, "Test Issue", "test content", "pending", nil, 0)
+	issue, dedup, err := d.CreateIssue(pdir, "Test Issue", "test content", "pending", []string{"desktop", "data-loss"}, 0)
 	if err != nil {
 		t.Fatalf("CreateIssue: %v", err)
 	}
@@ -106,6 +109,9 @@ func TestIssuesCRUD(t *testing.T) {
 	if issue.Date == "" {
 		t.Fatal("expected issue date to be set")
 	}
+	if len(issue.Tags) != 2 || issue.Tags[0] != "desktop" || issue.Tags[1] != "data-loss" {
+		t.Fatalf("expected tags to persist on create, got %#v", issue.Tags)
+	}
 
 	// Dedup check
 	_, dedup2, _ := d.CreateIssue(pdir, "Test Issue", "dup content", "pending", nil, 0)
@@ -114,12 +120,15 @@ func TestIssuesCRUD(t *testing.T) {
 	}
 
 	// Update
-	updated, err := d.UpdateIssue(issue.ID, pdir, map[string]interface{}{"status": "in_progress"})
+	updated, err := d.UpdateIssue(issue.ID, pdir, map[string]interface{}{"status": "in_progress", "tags": []string{"desktop", "fixed"}})
 	if err != nil {
 		t.Fatalf("UpdateIssue: %v", err)
 	}
 	if updated.Status != "in_progress" {
 		t.Fatalf("expected in_progress, got %s", updated.Status)
+	}
+	if len(updated.Tags) != 2 || updated.Tags[1] != "fixed" {
+		t.Fatalf("expected tags to update, got %#v", updated.Tags)
 	}
 
 	// List
@@ -129,6 +138,9 @@ func TestIssuesCRUD(t *testing.T) {
 	}
 	if result.Total != 1 {
 		t.Fatalf("expected total 1, got %d", result.Total)
+	}
+	if len(result.Issues) != 1 || len(result.Issues[0].Tags) != 2 {
+		t.Fatalf("expected listed issue tags, got %#v", result.Issues)
 	}
 
 	// Archive
@@ -155,6 +167,48 @@ func TestIssuesCRUD(t *testing.T) {
 	}
 	if detail.Status != "archived" {
 		t.Fatalf("expected archived status in detail, got %s", detail.Status)
+	}
+	if len(archived.Issues) != 1 || len(archived.Issues[0].Tags) != 2 {
+		t.Fatalf("expected archived issue tags, got %#v", archived.Issues)
+	}
+}
+
+func TestOpenMigratesIssueTagsColumns(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "legacy.db")
+
+	conn, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+	defer conn.Close()
+
+	legacyTables := []string{
+		"CREATE TABLE schema_version (version INTEGER NOT NULL DEFAULT 0)",
+		"CREATE TABLE issues (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', issue_number INTEGER NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', content TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', investigation TEXT NOT NULL DEFAULT '', root_cause TEXT NOT NULL DEFAULT '', solution TEXT NOT NULL DEFAULT '', files_changed TEXT NOT NULL DEFAULT '[]', test_result TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', parent_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+		"CREATE TABLE issues_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', issue_number INTEGER NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', investigation TEXT NOT NULL DEFAULT '', root_cause TEXT NOT NULL DEFAULT '', solution TEXT NOT NULL DEFAULT '', files_changed TEXT NOT NULL DEFAULT '[]', test_result TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', feature_id TEXT NOT NULL DEFAULT '', parent_id INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT '', original_issue_id INTEGER NOT NULL DEFAULT 0, archived_at TEXT NOT NULL, created_at TEXT NOT NULL)",
+	}
+	for _, ddl := range legacyTables {
+		if _, err := conn.Exec(ddl); err != nil {
+			t.Fatalf("create legacy table: %v", err)
+		}
+	}
+	conn.Close()
+
+	d, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open migrated db: %v", err)
+	}
+	defer d.Close()
+
+	for _, table := range []string{"issues", "issues_archive"} {
+		exists, err := columnExists(d.conn, table, "tags")
+		if err != nil {
+			t.Fatalf("check migrated column for %s: %v", table, err)
+		}
+		if !exists {
+			t.Fatalf("expected tags column to be added for %s", table)
+		}
 	}
 }
 
