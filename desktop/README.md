@@ -1,30 +1,35 @@
-# README
+# Desktop
 
-## About
+This directory contains the Wails desktop app for AIVectorMemory.
 
-This is the official Wails Vue-TS template.
+## Development
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
-
-## Live Development
-
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
-
-## Building
-
-To build a redistributable, production mode package, use `wails build`.
-
-For a macOS drag-install image that lets users drop the app into `Applications`, run:
+Run live development with:
 
 ```bash
 cd desktop
-/tmp/gopath/bin/wails build -clean -platform darwin/amd64 -m -nosyncgomod
-./build/package_dmg.sh
+wails dev
 ```
 
-The resulting installer image is written to `build/bin/AIVectorMemory-darwin-amd64.dmg`.
-The DMG window automatically uses `docs/image.png` as the background and applies a 60% white overlay without additional decorative elements.
+The desktop shell embeds `frontend/dist` in production and binds Go methods from [`app.go`](./app.go) into the Vue frontend.
+
+## Build
+
+For a complete macOS DMG build, prefer the wrapper script:
+
+```bash
+cd desktop
+TARGET_ARCH=amd64 ./build/build_macos_dmg.sh
+```
+
+It will:
+
+- build `AIVectorMemory.app` with Wails
+- copy `vec0.dylib` into `Contents/Resources`
+- generate a drag-install DMG
+
+More details:
+
+- [Build assets README](./build/README.md)
+- [macOS Intel packaging guide](../docs/MACOS-INTEL-BUILD.zh-CN.md)
+- [Architecture guide](../docs/ARCHITECTURE.zh-CN.md)

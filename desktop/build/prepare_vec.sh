@@ -1,35 +1,75 @@
 #!/bin/bash
-# Prepare sqlite-vec extension for bundling with desktop app
-# Copies vec0 library from Python package to ~/.aivectormemory/
+# Prepare sqlite-vec for desktop runtime or app bundle resources.
 
-set -e
+set -euo pipefail
 
-DEST="$HOME/.aivectormemory"
+DEST="${1:-$HOME/.aivectormemory}"
+TARGET_NAME="${2:-}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+SOURCE_PATH="${VEC_PATH:-}"
+
+resolve_source_path() {
+    if [ -n "$SOURCE_PATH" ]; then
+        printf '%s\n' "$SOURCE_PATH"
+        return 0
+    fi
+
+    "$PYTHON_BIN" -c "import sqlite_vec; print(sqlite_vec.loadable_path())" 2>/dev/null || true
+}
+
+resolve_existing_file() {
+    local candidate="$1"
+
+    if [ -z "$candidate" ]; then
+        return 1
+    fi
+
+    if [ -f "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    if [ -f "${candidate}.dylib" ]; then
+        printf '%s\n' "${candidate}.dylib"
+        return 0
+    fi
+
+    if [ -f "${candidate}.so" ]; then
+        printf '%s\n' "${candidate}.so"
+        return 0
+    fi
+
+    if [ -f "${candidate}.dll" ]; then
+        printf '%s\n' "${candidate}.dll"
+        return 0
+    fi
+
+    return 1
+}
+
+default_target_name() {
+    local source_file="$1"
+    case "$source_file" in
+        *.dylib) printf 'vec0.dylib\n' ;;
+        *.so) printf 'vec0.so\n' ;;
+        *.dll) printf 'vec0.dll\n' ;;
+        *) printf 'vec0\n' ;;
+    esac
+}
+
+SOURCE_CANDIDATE="$(resolve_source_path)"
+SOURCE_FILE="$(resolve_existing_file "$SOURCE_CANDIDATE" || true)"
+
+if [ -z "$SOURCE_FILE" ]; then
+    echo "sqlite-vec not found. Set VEC_PATH or install sqlite-vec for $PYTHON_BIN." >&2
+    exit 1
+fi
+
+if [ -z "$TARGET_NAME" ]; then
+    TARGET_NAME="$(default_target_name "$SOURCE_FILE")"
+fi
+
 mkdir -p "$DEST"
-
-VEC_PATH=$(python3 -c "import sqlite_vec; print(sqlite_vec.loadable_path())" 2>/dev/null || true)
-
-if [ -z "$VEC_PATH" ]; then
-    echo "sqlite-vec not found. Install it: pip install sqlite-vec"
-    exit 1
-fi
-
-# Find the actual file (with platform extension)
-if [ -f "${VEC_PATH}.dylib" ]; then
-    cp "${VEC_PATH}.dylib" "$DEST/vec0.dylib"
-    echo "Copied vec0.dylib to $DEST/"
-elif [ -f "${VEC_PATH}.so" ]; then
-    cp "${VEC_PATH}.so" "$DEST/vec0.so"
-    echo "Copied vec0.so to $DEST/"
-elif [ -f "${VEC_PATH}.dll" ]; then
-    cp "${VEC_PATH}.dll" "$DEST/vec0.dll"
-    echo "Copied vec0.dll to $DEST/"
-elif [ -f "$VEC_PATH" ]; then
-    cp "$VEC_PATH" "$DEST/vec0"
-    echo "Copied vec0 to $DEST/"
-else
-    echo "vec0 extension file not found at $VEC_PATH"
-    exit 1
-fi
-
-echo "sqlite-vec ready for desktop app"
+cp "$SOURCE_FILE" "$DEST/$TARGET_NAME"
+echo "Copied $(basename "$SOURCE_FILE") -> $DEST/$TARGET_NAME"
+echo "sqlite-vec ready"

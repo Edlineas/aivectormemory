@@ -22,6 +22,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            platform: macos-amd64
+            vec_os: macos
+            vec_arch: x86_64
+            vec_ext: tar.gz
+            vec_file: vec0.dylib
           - os: macos-14
             goos: darwin
             goarch: arm64
