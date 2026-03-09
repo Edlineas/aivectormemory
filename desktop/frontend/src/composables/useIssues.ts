@@ -33,28 +33,28 @@ export function useIssues() {
     }
   }
 
-  async function getDetail(issueNumber: number) {
-    return await GetIssueDetail(issueNumber, projectStore.current)
+  async function getDetail(id: number) {
+    return await GetIssueDetail(id, projectStore.current)
   }
 
   async function create(title: string, content: string, status: string, tags: string[], parentId: number) {
     return await CreateIssue(projectStore.current, title, content, status, tags, parentId)
   }
 
-  async function update(issueNumber: number, field: string, value: string) {
-    return await UpdateIssue(issueNumber, projectStore.current, JSON.stringify({ [field]: value }))
+  async function update(id: number, field: string, value: string) {
+    return await UpdateIssue(id, projectStore.current, JSON.stringify({ [field]: value }))
   }
 
-  async function updateFull(issueNumber: number, data: Record<string, any>) {
-    return await UpdateIssue(issueNumber, projectStore.current, JSON.stringify(data))
+  async function updateFull(id: number, data: Record<string, any>) {
+    return await UpdateIssue(id, projectStore.current, JSON.stringify(data))
   }
 
-  async function archive(issueNumber: number) {
-    await ArchiveIssue(issueNumber, projectStore.current)
+  async function archive(id: number) {
+    await ArchiveIssue(id, projectStore.current)
   }
 
-  async function remove(issueNumber: number, isArchived: boolean) {
-    await DeleteIssue(issueNumber, projectStore.current, isArchived)
+  async function remove(id: number, isArchived: boolean) {
+    await DeleteIssue(id, projectStore.current, isArchived)
   }
 
   function setPage(p: number) { page.value = p; load() }

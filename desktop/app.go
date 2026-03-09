@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	goRuntime "runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,12 +29,23 @@ import (
 const AppVersion = "1.0.13"
 
 type App struct {
-	ctx       context.Context
-	database  *db.DB
-	engine    *embedding.Engine
-	settings  *settings.Settings
-	launcher  *webserver.Launcher
-	auth      *auth.Manager
+	ctx      context.Context
+	database *db.DB
+	engine   *embedding.Engine
+	settings *settings.Settings
+	launcher *webserver.Launcher
+	auth     *auth.Manager
+}
+
+type releaseAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+}
+
+type githubRelease struct {
+	TagName string         `json:"tag_name"`
+	HTMLURL string         `json:"html_url"`
+	Assets  []releaseAsset `json:"assets"`
 }
 
 func NewApp() *App {
@@ -216,19 +228,24 @@ func (a *App) GetIssueDetail(id int, projectDir string) (*db.Issue, error) {
 	return a.database.GetIssueDetail(id, projectDir)
 }
 
-func (a *App) CreateIssue(projectDir, date, title, content string, tags []string, parentID int) (map[string]interface{}, error) {
-	issue, dedup, err := a.database.CreateIssue(projectDir, date, title, content, tags, parentID)
+func (a *App) CreateIssue(projectDir, title, content, status string, tags []string, parentID int) (map[string]interface{}, error) {
+	issue, dedup, err := a.database.CreateIssue(projectDir, title, content, status, tags, parentID)
 	if err != nil {
 		return nil, err
 	}
 	if dedup {
-		return map[string]interface{}{"deduplicated": true, "title": title}, nil
+		return map[string]interface{}{
+			"deduplicated": true,
+			"duplicate":    true,
+			"title":        title,
+		}, nil
 	}
 	result := map[string]interface{}{
 		"id":           issue.ID,
 		"issue_number": issue.IssueNumber,
 		"title":        issue.Title,
 		"deduplicated": false,
+		"duplicate":    false,
 	}
 	return result, nil
 }
@@ -518,59 +535,121 @@ func (a *App) CheckEnvironment() map[string]interface{} {
 
 func (a *App) CheckUpgrade(currentAvmVersion string) map[string]interface{} {
 	result := map[string]interface{}{
-		"avm_latest":            "",
-		"avm_update_available":  false,
-		"app_latest":            "",
-		"app_update_available":  false,
-		"app_download_url":      "",
+		"avm_latest":           "",
+		"avm_update_available": false,
+		"app_latest":           "",
+		"app_update_available": false,
+		"app_download_url":     "",
 	}
 
-	// 1. Check PyPI latest version
 	pythonPath := a.findPython()
-	if pythonPath != "" {
-		// pip install aivectormemory== triggers error with available versions
-		out, _ := exec.Command(pythonPath, "-m", "pip", "install", "aivectormemory==___").CombinedOutput()
-		outStr := string(out)
-		// Parse "from versions: 0.2.1, 0.2.2, ..., 0.2.6)"
-		if idx := strings.LastIndex(outStr, "from versions:"); idx >= 0 {
-			tail := outStr[idx+len("from versions:"):]
-			if end := strings.Index(tail, ")"); end >= 0 {
-				versions := strings.TrimSpace(tail[:end])
-				parts := strings.Split(versions, ",")
-				if len(parts) > 0 {
-					latest := strings.TrimSpace(parts[len(parts)-1])
-					result["avm_latest"] = latest
-					if latest != "" && isNewerVersion(latest, currentAvmVersion) {
-						result["avm_update_available"] = true
-					}
-				}
-			}
+	if latest := latestPyPIVersion(pythonPath); latest != "" {
+		result["avm_latest"] = latest
+		if isNewerVersion(latest, currentAvmVersion) {
+			result["avm_update_available"] = true
 		}
 	}
 
-	// 2. Check GitHub Releases latest version
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get("https://api.github.com/repos/Edlineas/aivectormemory/releases/latest")
-	if err == nil {
-		defer resp.Body.Close()
-		if resp.StatusCode == 200 {
-			body, _ := io.ReadAll(resp.Body)
-			var release struct {
-				TagName string `json:"tag_name"`
-				HTMLURL string `json:"html_url"`
-			}
-			if json.Unmarshal(body, &release) == nil && release.TagName != "" {
-				appLatest := strings.TrimPrefix(release.TagName, "v")
-				result["app_latest"] = appLatest
-				result["app_download_url"] = release.HTMLURL
-				if isNewerVersion(appLatest, AppVersion) {
-					result["app_update_available"] = true
-				}
-			}
+	release, err := fetchLatestDesktopRelease(client)
+	if err == nil && release.TagName != "" {
+		appLatest := strings.TrimPrefix(release.TagName, "v")
+		result["app_latest"] = appLatest
+		result["app_download_url"] = releaseDownloadURL(release, goRuntime.GOOS, goRuntime.GOARCH)
+		if isNewerVersion(appLatest, AppVersion) {
+			result["app_update_available"] = true
 		}
 	}
 
 	return result
+}
+
+func latestPyPIVersion(pythonPath string) string {
+	if pythonPath == "" {
+		return ""
+	}
+
+	out, err := exec.Command(pythonPath, "-m", "pip", "install", "aivectormemory==___").CombinedOutput()
+	if err != nil && len(out) == 0 {
+		return ""
+	}
+
+	outStr := string(out)
+	idx := strings.LastIndex(outStr, "from versions:")
+	if idx < 0 {
+		return ""
+	}
+
+	tail := outStr[idx+len("from versions:"):]
+	end := strings.Index(tail, ")")
+	if end < 0 {
+		return ""
+	}
+
+	versions := strings.TrimSpace(tail[:end])
+	parts := strings.Split(versions, ",")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return strings.TrimSpace(parts[len(parts)-1])
+}
+
+func fetchLatestDesktopRelease(client *http.Client) (githubRelease, error) {
+	resp, err := client.Get("https://api.github.com/repos/Edlineas/aivectormemory/releases/latest")
+	if err != nil {
+		return githubRelease{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return githubRelease{}, fmt.Errorf("unexpected github status: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return githubRelease{}, err
+	}
+
+	var release githubRelease
+	if err := json.Unmarshal(body, &release); err != nil {
+		return githubRelease{}, err
+	}
+	return release, nil
+}
+
+func releaseDownloadURL(release githubRelease, goos, goarch string) string {
+	for _, keyword := range releaseAssetKeywords(goos, goarch) {
+		for _, asset := range release.Assets {
+			if strings.Contains(strings.ToLower(asset.Name), keyword) && asset.BrowserDownloadURL != "" {
+				return asset.BrowserDownloadURL
+			}
+		}
+	}
+
+	return release.HTMLURL
+}
+
+func releaseAssetKeywords(goos, goarch string) []string {
+	switch goos {
+	case "darwin":
+		if goarch == "arm64" {
+			return []string{"darwin-arm64.dmg", "macos-arm64.dmg", "macos-aarch64.dmg"}
+		}
+		return []string{"darwin-amd64.dmg", "macos-x64.dmg", "macos-amd64.dmg", "macos-intel.dmg"}
+	case "windows":
+		if goarch == "arm64" {
+			return []string{"windows-arm64-setup.exe", "windows-arm64-installer.exe", "windows-arm64.exe"}
+		}
+		return []string{"windows-x64-setup.exe", "windows-amd64-setup.exe", "windows-x64-installer.exe", "windows-x64.exe"}
+	case "linux":
+		if goarch == "arm64" {
+			return []string{"linux-arm64.tar.gz", "linux-aarch64.tar.gz"}
+		}
+		return []string{"linux-x64.tar.gz", "linux-amd64.tar.gz"}
+	default:
+		return nil
+	}
 }
 
 // isNewerVersion returns true if remote > local (semver comparison)

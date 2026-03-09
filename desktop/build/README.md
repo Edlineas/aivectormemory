@@ -21,9 +21,24 @@ The directory contains the following files:
 - `Info.dev.plist` - same as the main plist file but used when building using `wails dev`.
 - `render_dmg_background.swift` - renders the drag-install DMG background from `docs/image.png` with a 60% white overlay.
 
+### Complete macOS build
+
+To build a full macOS installer, use the wrapper script:
+
+```bash
+cd desktop
+TARGET_ARCH=amd64 ./build/build_macos_dmg.sh
+```
+
+The wrapper script will:
+
+- build the Wails app for the target arch
+- bundle `vec0.dylib` into `AIVectorMemory.app/Contents/Resources`
+- call `package_dmg.sh` to generate the final DMG
+
 ### Drag-install DMG
 
-To create a macOS DMG that supports dragging the app into `Applications`, first build the app bundle and then run the packaging script:
+If you already have an `.app` bundle and only want to package the DMG, run:
 
 ```bash
 cd desktop
@@ -43,6 +58,15 @@ You may also provide custom paths:
 
 ```bash
 ./build/package_dmg.sh /path/to/AIVectorMemory.app /path/to/output.dmg
+```
+
+### sqlite-vec resource preparation
+
+`prepare_vec.sh` can copy `sqlite-vec` either into the user data directory or into an app bundle resource directory:
+
+```bash
+./build/prepare_vec.sh "$HOME/.aivectormemory"
+./build/prepare_vec.sh /path/to/AIVectorMemory.app/Contents/Resources vec0.dylib
 ```
 
 ## Windows
