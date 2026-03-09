@@ -1,5 +1,7 @@
 # CHANGELOG
 
+- [2026-03-10 02:20] FIX: 收紧 onnxruntime 版本上限，修复 CPython 3.10 在 uv sync 下无法解依赖的问题 (Files: pyproject.toml, CHANGELOG.md)
+- [2026-03-10 02:09] FIX: 重建桌面端运行时切换链路并修复 issue/memory 标签同步，避免启动后空指针与标签索引错乱 (Files: desktop/runtime.go, desktop/app.go, desktop/app_test.go, desktop/internal/webserver/launcher.go, aivectormemory/db/base.py, aivectormemory/web/routes/issues.py, aivectormemory/web/routes/memories.py, tests/test_issue_routes.py, docs/ARCHITECTURE.zh-CN.md)
 - [2026-03-10 00:20] FIX: 修复桌面端 Issue 创建/详情/归档标识错位，并补齐 mac Intel 发布矩阵 (Files: desktop/app.go, desktop/internal/db/issues.go, desktop/internal/db/db_test.go, desktop/frontend/src/composables/useIssues.ts, desktop/frontend/src/views/IssuesView.vue, .github/workflows/release.yml, docs/MACOS-INTEL-BUILD.zh-CN.md)
 - [2026-03-09 20:42] DOCS: 新增开发架构文档与 mac Intel 打包/更新安装说明，整理桌面构建入口文档 (Files: docs/ARCHITECTURE.zh-CN.md, docs/MACOS-INTEL-BUILD.zh-CN.md, docs/README.zh-CN.md, desktop/README.md, desktop/build/README.md)
 - [2026-03-09 20:42] FEAT: 新增 macOS Intel 一键 DMG 构建脚本，优化 sqlite-vec 资源打包与桌面升级下载地址匹配逻辑 (Files: desktop/build/build_macos_dmg.sh, desktop/build/prepare_vec.sh, desktop/build/package_dmg.sh, desktop/app.go, desktop/app_test.go)

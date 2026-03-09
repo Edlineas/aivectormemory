@@ -22,6 +22,9 @@ func (l *Launcher) Start() error {
 	if l.IsRunning() {
 		return fmt.Errorf("web dashboard already running on port %d", l.Port)
 	}
+	if l.PythonPath == "" {
+		return fmt.Errorf("python path is not configured")
+	}
 
 	cmd := exec.Command(l.PythonPath, "-m", "aivectormemory", "web", "--port", fmt.Sprintf("%d", l.Port))
 	setProcAttr(cmd)

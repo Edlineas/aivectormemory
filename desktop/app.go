@@ -29,12 +29,13 @@ import (
 const AppVersion = "1.0.14"
 
 type App struct {
-	ctx      context.Context
-	database *db.DB
-	engine   *embedding.Engine
-	settings *settings.Settings
-	launcher *webserver.Launcher
-	auth     *auth.Manager
+	ctx        context.Context
+	database   *db.DB
+	engine     *embedding.Engine
+	settings   *settings.Settings
+	launcher   *webserver.Launcher
+	auth       *auth.Manager
+	startupErr error
 }
 
 type releaseAsset struct {
@@ -55,29 +56,19 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	if a.settings == nil {
-		a.settings = settings.Load()
+		a.settings = normalizeSettings(settings.Load())
+	} else {
+		a.settings = normalizeSettings(a.settings)
 	}
 
-	d, err := db.Open(a.settings.DBPath)
+	runtime, err := buildRuntime(a.settings)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to open database: %v\n", err)
-		return
+		a.startupErr = err
+		a.clearRuntime()
+		fmt.Fprintf(os.Stderr, "failed to initialize desktop runtime: %v\n", err)
+	} else {
+		a.setRuntime(runtime, a.settings)
 	}
-	a.database = d
-
-	// Try loading sqlite-vec (non-fatal if not found)
-	if err := d.LoadVecExtension(); err != nil {
-		fmt.Fprintf(os.Stderr, "sqlite-vec not loaded: %v\n", err)
-	}
-
-	// Initialize embedding engine
-	a.engine = embedding.NewEngine(a.settings.PythonPath)
-
-	// Initialize auth manager
-	a.auth = auth.NewManager(d)
-
-	// Initialize web launcher
-	a.launcher = webserver.NewLauncher(a.engine.PythonPath, a.settings.WebPort)
 
 	// Restore window position if previously saved
 	if a.settings.WindowX >= 0 && a.settings.WindowY >= 0 {
@@ -99,50 +90,62 @@ func (a *App) shutdown(ctx context.Context) {
 		}
 	}
 
-	if a.database != nil {
-		a.database.Close()
-	}
-	// Don't stop web dashboard on shutdown (detached)
-	if a.launcher != nil {
-		a.launcher.Detach()
-	}
+	closeRuntime(a.snapshotRuntime(), true)
+	a.clearRuntime()
 }
 
 // ============== Projects ==============
 
 func (a *App) GetProjects() ([]db.Project, error) {
-	return a.database.GetProjects()
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetProjects()
 }
 
 func (a *App) AddProject(projectDir string) error {
-	return a.database.AddProject(projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return err
+	}
+	return database.AddProject(projectDir)
 }
 
 func (a *App) DeleteProject(projectDir string) (int, error) {
-	return a.database.DeleteProject(projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return 0, err
+	}
+	return database.DeleteProject(projectDir)
 }
 
 func (a *App) GetStats(projectDir string) (map[string]interface{}, error) {
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+
 	// Memory counts
-	projResult, _ := a.database.GetMemories("project", projectDir, "", "", "", 1, 0)
-	userResult, _ := a.database.GetMemories("user", "", "", "", "", 1, 0)
-	allResult, _ := a.database.GetMemories("all", projectDir, "", "", "", 1, 0)
+	projResult, _ := database.GetMemories("project", projectDir, "", "", "", 1, 0)
+	userResult, _ := database.GetMemories("user", "", "", "", "", 1, 0)
+	allResult, _ := database.GetMemories("all", projectDir, "", "", "", 1, 0)
 
 	// Issue status counts
 	statusCounts := map[string]int{}
 	for _, s := range []string{"pending", "in_progress", "completed"} {
-		result, _ := a.database.GetIssues(projectDir, s, "", "", 1, 0)
+		result, _ := database.GetIssues(projectDir, s, "", "", 1, 0)
 		if result != nil {
 			statusCounts[s] = result.Total
 		}
 	}
-	archivedResult, _ := a.database.GetIssues(projectDir, "archived", "", "", 1, 0)
+	archivedResult, _ := database.GetIssues(projectDir, "archived", "", "", 1, 0)
 	if archivedResult != nil {
 		statusCounts["archived"] = archivedResult.Total
 	}
 
 	// Tag counts
-	tags, _ := a.database.GetTags(projectDir, "")
+	tags, _ := database.GetTags(projectDir, "")
 
 	projCount := 0
 	if projResult != nil {
@@ -172,27 +175,51 @@ func (a *App) GetStats(projectDir string) (map[string]interface{}, error) {
 // ============== Memories ==============
 
 func (a *App) GetMemories(scope, projectDir, query, tag, source string, limit, offset int) (*db.MemoryListResult, error) {
-	return a.database.GetMemories(scope, projectDir, query, tag, source, limit, offset)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetMemories(scope, projectDir, query, tag, source, limit, offset)
 }
 
 func (a *App) GetMemoryDetail(id string) (*db.Memory, error) {
-	return a.database.GetMemoryDetail(id)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetMemoryDetail(id)
 }
 
 func (a *App) UpdateMemory(id, content string, tags []string, scope string) (*db.Memory, error) {
-	return a.database.UpdateMemory(id, content, tags, scope)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.UpdateMemory(id, content, tags, scope)
 }
 
 func (a *App) DeleteMemory(id string) error {
-	return a.database.DeleteMemory(id)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return err
+	}
+	return database.DeleteMemory(id)
 }
 
 func (a *App) DeleteMemoriesBatch(ids []string) (int, error) {
-	return a.database.DeleteMemoriesBatch(ids)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return 0, err
+	}
+	return database.DeleteMemoriesBatch(ids)
 }
 
 func (a *App) ExportMemories(scope, projectDir string) ([]db.MemoryExport, error) {
-	return a.database.ExportMemories(scope, projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.ExportMemories(scope, projectDir)
 }
 
 func (a *App) ImportMemories(itemsJSON string, projectDir string) (map[string]int, error) {
@@ -200,7 +227,11 @@ func (a *App) ImportMemories(itemsJSON string, projectDir string) (map[string]in
 	if err := json.Unmarshal([]byte(itemsJSON), &items); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
-	imported, skipped, err := a.database.ImportMemories(items, projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	imported, skipped, err := database.ImportMemories(items, projectDir)
 	if err != nil {
 		return nil, err
 	}
@@ -208,28 +239,45 @@ func (a *App) ImportMemories(itemsJSON string, projectDir string) (map[string]in
 }
 
 func (a *App) SearchMemories(query, scope, projectDir string, tags []string, topK int) ([]db.Memory, error) {
-	if a.engine == nil {
-		return nil, fmt.Errorf("embedding engine not available")
-	}
-	emb, err := a.engine.Encode(query)
+	engine, err := a.requireEngine()
 	if err != nil {
 		return nil, err
 	}
-	return a.database.SearchMemories(emb, scope, projectDir, tags, topK)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	emb, err := engine.Encode(query)
+	if err != nil {
+		return nil, err
+	}
+	return database.SearchMemories(emb, scope, projectDir, tags, topK)
 }
 
 // ============== Issues ==============
 
 func (a *App) GetIssues(projectDir, status, date, keyword string, limit, offset int) (*db.IssueListResult, error) {
-	return a.database.GetIssues(projectDir, status, date, keyword, limit, offset)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetIssues(projectDir, status, date, keyword, limit, offset)
 }
 
 func (a *App) GetIssueDetail(id int, projectDir string) (*db.Issue, error) {
-	return a.database.GetIssueDetail(id, projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetIssueDetail(id, projectDir)
 }
 
 func (a *App) CreateIssue(projectDir, title, content, status string, tags []string, parentID int) (map[string]interface{}, error) {
-	issue, dedup, err := a.database.CreateIssue(projectDir, title, content, status, tags, parentID)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	issue, dedup, err := database.CreateIssue(projectDir, title, content, status, tags, parentID)
 	if err != nil {
 		return nil, err
 	}
@@ -253,147 +301,259 @@ func (a *App) CreateIssue(projectDir, title, content, status string, tags []stri
 func (a *App) UpdateIssue(id int, projectDir string, fieldsJSON string) (*db.Issue, error) {
 	var fields map[string]interface{}
 	json.Unmarshal([]byte(fieldsJSON), &fields)
-	return a.database.UpdateIssue(id, projectDir, fields)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.UpdateIssue(id, projectDir, fields)
 }
 
 func (a *App) ArchiveIssue(id int, projectDir string) error {
-	return a.database.ArchiveIssue(id, projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return err
+	}
+	return database.ArchiveIssue(id, projectDir)
 }
 
 func (a *App) DeleteIssue(id int, projectDir string, archived bool) error {
-	return a.database.DeleteIssue(id, projectDir, archived)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return err
+	}
+	return database.DeleteIssue(id, projectDir, archived)
 }
 
 // ============== Tasks ==============
 
 func (a *App) GetTasks(projectDir, featureID, status, keyword string) ([]db.TaskGroup, error) {
-	return a.database.GetTasks(projectDir, featureID, status, keyword)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetTasks(projectDir, featureID, status, keyword)
 }
 
 func (a *App) GetArchivedTasks(projectDir, featureID string) ([]db.TaskGroup, error) {
-	return a.database.GetArchivedTasks(projectDir, featureID)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetArchivedTasks(projectDir, featureID)
 }
 
 func (a *App) CreateTasks(projectDir, featureID, tasksJSON, taskType string) (int, error) {
 	var tasks []map[string]interface{}
 	json.Unmarshal([]byte(tasksJSON), &tasks)
-	return a.database.CreateTasks(projectDir, featureID, tasks, taskType)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return 0, err
+	}
+	return database.CreateTasks(projectDir, featureID, tasks, taskType)
 }
 
 func (a *App) UpdateTask(id int, projectDir, fieldsJSON string) (*db.Task, error) {
 	var fields map[string]interface{}
 	json.Unmarshal([]byte(fieldsJSON), &fields)
-	return a.database.UpdateTask(id, projectDir, fields)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.UpdateTask(id, projectDir, fields)
 }
 
 func (a *App) DeleteTask(id int, projectDir string) error {
-	return a.database.DeleteTask(id, projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return err
+	}
+	return database.DeleteTask(id, projectDir)
 }
 
 func (a *App) DeleteTasksByFeature(featureID, projectDir string) (int, error) {
-	return a.database.DeleteTasksByFeature(featureID, projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return 0, err
+	}
+	return database.DeleteTasksByFeature(featureID, projectDir)
 }
 
 // ============== Tags ==============
 
 func (a *App) GetTags(projectDir, query string) ([]db.TagInfo, error) {
-	return a.database.GetTags(projectDir, query)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetTags(projectDir, query)
 }
 
 func (a *App) RenameTag(projectDir, oldName, newName string) (int, error) {
-	return a.database.RenameTag(projectDir, oldName, newName)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return 0, err
+	}
+	return database.RenameTag(projectDir, oldName, newName)
 }
 
 func (a *App) MergeTags(projectDir string, sourceTags []string, targetName string) (int, error) {
-	return a.database.MergeTags(projectDir, sourceTags, targetName)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return 0, err
+	}
+	return database.MergeTags(projectDir, sourceTags, targetName)
 }
 
 func (a *App) DeleteTags(projectDir string, tagNames []string) (int, error) {
-	return a.database.DeleteTags(projectDir, tagNames)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return 0, err
+	}
+	return database.DeleteTags(projectDir, tagNames)
 }
 
 // ============== Session Status ==============
 
 func (a *App) GetStatus(projectDir string) (*db.SessionState, error) {
-	return a.database.GetStatus(projectDir)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetStatus(projectDir)
 }
 
 func (a *App) UpdateStatus(projectDir, fieldsJSON string, clearFields []string) (*db.SessionState, error) {
 	var fields map[string]interface{}
 	json.Unmarshal([]byte(fieldsJSON), &fields)
-	return a.database.UpdateStatus(projectDir, fields, clearFields)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.UpdateStatus(projectDir, fields, clearFields)
 }
 
 // ============== Maintenance ==============
 
 func (a *App) HealthCheck() (*db.HealthReport, error) {
-	return a.database.HealthCheck()
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.HealthCheck()
 }
 
 func (a *App) GetDBStats() (*db.DBStats, error) {
-	return a.database.GetDBStats(a.settings.DBPath)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return nil, err
+	}
+	return database.GetDBStats(a.currentSettings().DBPath)
 }
 
 func (a *App) RepairMissingEmbeddings() error {
-	if a.engine == nil {
-		return fmt.Errorf("embedding engine not available")
+	engine, err := a.requireEngine()
+	if err != nil {
+		return err
 	}
-	return embedding.BatchRepair(a.ctx, a.database, a.engine, 50)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return err
+	}
+	return embedding.BatchRepair(a.ctx, database, engine, 50)
 }
 
 func (a *App) RebuildAllEmbeddings() error {
-	if a.engine == nil {
-		return fmt.Errorf("embedding engine not available")
+	engine, err := a.requireEngine()
+	if err != nil {
+		return err
 	}
-	embedding.RebuildAllEmbeddings(a.ctx, a.database, a.engine)
+	database, err := a.requireDatabase()
+	if err != nil {
+		return err
+	}
+	embedding.RebuildAllEmbeddings(a.ctx, database, engine)
 	return nil
 }
 
 // ============== Backup ==============
 
 func (a *App) BackupDB() (*backup.BackupInfo, error) {
-	return backup.BackupDB(a.settings.DBPath, "")
+	return backup.BackupDB(a.currentSettings().DBPath, "")
 }
 
 func (a *App) RestoreDB(backupPath string) error {
-	return backup.RestoreDB(a.settings.DBPath, backupPath)
+	return backup.RestoreDB(a.currentSettings().DBPath, backupPath)
 }
 
 func (a *App) ListBackups() ([]backup.BackupInfo, error) {
-	return backup.ListBackups(a.settings.DBPath)
+	return backup.ListBackups(a.currentSettings().DBPath)
 }
 
 // ============== Web Dashboard ==============
 
 func (a *App) LaunchWebDashboard() error {
-	return a.launcher.Start()
+	launcher, err := a.requireLauncher()
+	if err != nil {
+		return err
+	}
+	return launcher.Start()
 }
 
 func (a *App) StopWebDashboard() error {
-	return a.launcher.Stop()
+	launcher, err := a.requireLauncher()
+	if err != nil {
+		return err
+	}
+	return launcher.Stop()
 }
 
 func (a *App) IsWebDashboardRunning() bool {
+	if a.launcher == nil {
+		return false
+	}
 	return a.launcher.IsRunning()
 }
 
 // ============== Settings ==============
 
 func (a *App) GetSettings() *settings.Settings {
-	return a.settings
+	return cloneSettings(a.currentSettings())
 }
 
 func (a *App) SaveSettings(s *settings.Settings) error {
-	a.settings = s
-	return settings.Save(s)
+	next := normalizeSettings(s)
+
+	if !a.runtimeNeedsReload(next) {
+		if err := settings.Save(next); err != nil {
+			return err
+		}
+		a.settings = next
+		return nil
+	}
+
+	nextRuntime, err := buildRuntime(next)
+	if err != nil {
+		return err
+	}
+	if err := settings.Save(next); err != nil {
+		closeRuntime(nextRuntime, false)
+		return err
+	}
+
+	oldRuntime := a.snapshotRuntime()
+	a.setRuntime(nextRuntime, next)
+	closeRuntime(oldRuntime, false)
+	return nil
 }
 
 func (a *App) SetLanguage(lang string) error {
 	// 1. 更新桌面设置
-	a.settings.Language = lang
-	if err := settings.Save(a.settings); err != nil {
+	current := cloneSettings(a.currentSettings())
+	current.Language = lang
+	if err := settings.Save(current); err != nil {
 		return fmt.Errorf("save desktop settings: %w", err)
 	}
+	a.settings = current
 	// 2. 写入 Python 侧 settings.json
 	home, _ := os.UserHomeDir()
 	settingsPath := filepath.Join(home, ".aivectormemory", "settings.json")
@@ -406,9 +566,9 @@ func (a *App) SetLanguage(lang string) error {
 	os.MkdirAll(filepath.Dir(settingsPath), 0755)
 	os.WriteFile(settingsPath, append(data, '\n'), 0644)
 	// 3. 调用 regenerate 更新所有项目文件
-	pythonPath := a.engine.PythonPath
+	pythonPath := a.findPython()
 	if pythonPath == "" {
-		pythonPath = "python3"
+		return fmt.Errorf("python not found")
 	}
 	cmd := exec.Command(pythonPath, "-m", "aivectormemory", "regenerate", "--lang", lang)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -462,7 +622,7 @@ func (a *App) SelectDirectory() (string, error) {
 }
 
 func (a *App) GetPythonPath() string {
-	return a.engine.PythonPath
+	return a.findPython()
 }
 
 func (a *App) DetectPython() string {
@@ -472,11 +632,19 @@ func (a *App) DetectPython() string {
 // ============== Auth ==============
 
 func (a *App) Register(username, password string) error {
-	return a.auth.Register(username, password)
+	authManager, err := a.requireAuth()
+	if err != nil {
+		return err
+	}
+	return authManager.Register(username, password)
 }
 
 func (a *App) Login(username, password string) (map[string]string, error) {
-	token, err := a.auth.Login(username, password)
+	authManager, err := a.requireAuth()
+	if err != nil {
+		return nil, err
+	}
+	token, err := authManager.Login(username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -484,12 +652,18 @@ func (a *App) Login(username, password string) (map[string]string, error) {
 }
 
 func (a *App) Logout(token string) error {
-	a.auth.Logout(token)
+	if a.auth != nil {
+		a.auth.Logout(token)
+	}
 	return nil
 }
 
 func (a *App) GetCurrentUser(token string) (map[string]string, error) {
-	username, err := a.auth.Verify(token)
+	authManager, err := a.requireAuth()
+	if err != nil {
+		return nil, err
+	}
+	username, err := authManager.Verify(token)
 	if err != nil {
 		return nil, err
 	}
@@ -696,9 +870,9 @@ func (a *App) InstallPackage(upgrade bool) (string, error) {
 
 func (a *App) findPython() string {
 	// If settings has a custom python path, try it first
-	if a.settings != nil && a.settings.PythonPath != "" {
-		if _, err := os.Stat(a.settings.PythonPath); err == nil {
-			return a.settings.PythonPath
+	if current := a.currentSettings(); current.PythonPath != "" {
+		if _, err := os.Stat(current.PythonPath); err == nil {
+			return current.PythonPath
 		}
 	}
 	// If engine already detected one, use it

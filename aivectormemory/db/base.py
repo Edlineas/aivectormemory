@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+_UNSET = object()
+
 
 class BaseRepo:
     """所有 Repo 的基类"""
@@ -115,6 +117,32 @@ class BaseMemoryRepo(BaseRepo):
     def _match_filters(self, mem: dict, filters: dict) -> bool:
         """子类覆盖以添加过滤逻辑"""
         return True
+
+    def update(self, mid: str, *, content: Any = _UNSET, tags: Any = _UNSET) -> dict | None:
+        row = self.conn.execute(f"SELECT * FROM {self.TABLE} WHERE id=?", (mid,)).fetchone()
+        if not row:
+            return None
+
+        updates: dict[str, Any] = {}
+        if content is not _UNSET:
+            updates["content"] = content
+        if tags is not _UNSET:
+            normalized_tags = tags or []
+            updates["tags"] = json.dumps(normalized_tags, ensure_ascii=False)
+
+        if not updates:
+            return dict(row)
+
+        updates["updated_at"] = self._now()
+        set_clause = ",".join(f"{k}=?" for k in updates)
+        self.conn.execute(
+            f"UPDATE {self.TABLE} SET {set_clause} WHERE id=?",
+            [*updates.values(), mid],
+        )
+        if tags is not _UNSET and self.TAG_TABLE:
+            self._sync_tags(mid, normalized_tags)
+        self._commit()
+        return self.get_by_id(mid)
 
     def search_by_vector_with_tags(self, embedding: list[float], tags: list[str],
                                     top_k: int = 5, **filters) -> list[dict]:

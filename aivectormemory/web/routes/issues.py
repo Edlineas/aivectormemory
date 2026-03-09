@@ -1,6 +1,3 @@
-import json
-
-from aivectormemory.utils import now_iso
 from aivectormemory.db.memory_repo import MemoryRepo
 from aivectormemory.db.issue_repo import IssueRepo
 from aivectormemory.db.task_repo import TaskRepo
@@ -49,12 +46,11 @@ def put_issue(handler, cm, iid, pdir):
         mem_repo = MemoryRepo(cm.conn, pdir)
         mem = mem_repo.get_by_id(memory_id)
         if mem:
-            tags = body.get("tags", [])
             content = f"[问题追踪] #{result['issue_number']} {result['title']}\n{result.get('content', '')}"
-            now = now_iso()
-            cm.conn.execute("UPDATE memories SET content=?, tags=?, updated_at=? WHERE id=?",
-                            (content, json.dumps(tags, ensure_ascii=False), now, memory_id))
-            cm.conn.commit()
+            updates = {"content": content}
+            if "tags" in body:
+                updates["tags"] = result.get("tags", [])
+            mem_repo.update(memory_id, **updates)
     return result
 
 

@@ -96,27 +96,25 @@ def put_memory(handler, cm, mid, pdir):
     body = _read_body(handler)
     repo = MemoryRepo(cm.conn, pdir)
     mem = repo.get_by_id(mid)
-    table = "memories"
     if not mem:
         user_repo = UserMemoryRepo(cm.conn)
         mem = user_repo.get_by_id(mid)
-        table = "user_memories"
+    else:
+        user_repo = None
     if not mem:
         return {"error": "not found"}
-    now = now_iso()
+
     updates = {}
     if "content" in body:
         updates["content"] = body["content"]
     if "tags" in body:
-        updates["tags"] = json.dumps(body["tags"])
-    if updates:
-        updates["updated_at"] = now
-        set_clause = ",".join(f"{k}=?" for k in updates)
-        cm.conn.execute(f"UPDATE {safe_table(table)} SET {set_clause} WHERE id=?", [*updates.values(), mid])
-        cm.conn.commit()
-    if table == "user_memories":
-        return UserMemoryRepo(cm.conn).get_by_id(mid)
-    return repo.get_by_id(mid)
+        updates["tags"] = body["tags"]
+    if not updates:
+        return mem
+
+    if user_repo is not None:
+        return user_repo.update(mid, **updates)
+    return repo.update(mid, **updates)
 
 
 def delete_memory(cm, mid, pdir):

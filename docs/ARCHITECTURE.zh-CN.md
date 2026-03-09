@@ -88,19 +88,25 @@ Web Dashboard
 1. Wails 启动 [`desktop/main.go`](../desktop/main.go)。
 2. [`desktop/app.go`](../desktop/app.go) 初始化：
    - `settings.Load()`
-   - `db.Open()`
-   - `LoadVecExtension()`
-   - `embedding.NewEngine()`
-   - `auth.NewManager()`
-   - `webserver.NewLauncher()`
+   - 通过 `desktop/runtime.go` 统一构建 `db.Open()`、`LoadVecExtension()`、`embedding.NewEngine()`、`auth.NewManager()`、`webserver.NewLauncher()`
+   - 如果数据库初始化失败，只记录降级状态，不让后续 Wails 导出方法直接空指针崩溃
 3. Vue 前端通过 `wailsjs/go/main/App` 调用 Go 方法。
 4. Go 方法落到 `desktop/internal/*` 进行数据库、配置或子进程操作。
+
+补充约束：
+
+- `SaveSettings()` 不再只是写 `desktop.json`，而是会在 `db_path`、`python_path`、`web_port` 变化时先构建新运行时，再交换旧运行时，避免“配置已变、实际运行对象没变”。
+- `LaunchWebDashboard()`、认证、数据库读写等绑定方法都必须先经过运行时可用性检查，返回明确错误，而不是直接解引用空对象。
 
 ### 3.3 Web Dashboard 链路
 
 1. 桌面端点击打开 Web 看板时，由 [`desktop/internal/webserver/launcher.go`](../desktop/internal/webserver/launcher.go) 启动 Python 命令 `python -m aivectormemory web`。
 2. Python HTTPServer 入口为 [`aivectormemory/web/app.py`](../aivectormemory/web/app.py)。
 3. API 请求交给 `aivectormemory.web.routes.*`。
+
+补充约束：
+
+- 问题跟踪与 memory 的标签同步必须同时维护 `memories.tags` JSON 和 `memory_tags` 关联表；局部更新时，未显式传入 `tags` 不能默认清空已有标签。
 
 ## 4. 数据与配置落点
 
