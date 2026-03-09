@@ -16,6 +16,7 @@ type Issue struct {
 	Title         string         `json:"title"`
 	Status        string         `json:"status"`
 	Content       string         `json:"content"`
+	Tags          []string       `json:"tags"`
 	Description   string         `json:"description"`
 	Investigation string         `json:"investigation"`
 	RootCause     string         `json:"root_cause"`
@@ -104,7 +105,7 @@ func (d *DB) getArchivedIssues(projectDir, date, keyword string, limit, offset i
 	d.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM issues_archive WHERE %s", whereClause), args...).Scan(&total)
 
 	args = append(args, limit, offset)
-	rows, err := d.Query(fmt.Sprintf("SELECT id, project_dir, issue_number, date, title, content, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, status, created_at, archived_at as updated_at FROM issues_archive WHERE %s ORDER BY archived_at DESC LIMIT ? OFFSET ?", whereClause), args...)
+	rows, err := d.Query(fmt.Sprintf("SELECT id, project_dir, issue_number, date, title, content, tags, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, status, created_at, archived_at as updated_at FROM issues_archive WHERE %s ORDER BY archived_at DESC LIMIT ? OFFSET ?", whereClause), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +139,7 @@ func (d *DB) getAllIssues(projectDir, date, keyword string, limit, offset int) (
 	var total int
 	d.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM (SELECT id FROM issues %s UNION ALL SELECT id FROM issues_archive %s)", w1, w2), allParams...).Scan(&total)
 
-	cols := "id, project_dir, issue_number, date, title, content, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, created_at"
+	cols := "id, project_dir, issue_number, date, title, content, tags, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, created_at"
 	sql := fmt.Sprintf(
 		"SELECT %s, status, updated_at FROM issues %s UNION ALL SELECT %s, 'archived' as status, archived_at as updated_at FROM issues_archive %s ORDER BY issue_number DESC LIMIT ? OFFSET ?",
 		cols, w1, cols, w2)
@@ -186,10 +187,11 @@ func (d *DB) CreateIssue(projectDir, date, title, content string, tags []string,
 	// Get next issue_number
 	var maxNum int
 	d.QueryRow("SELECT COALESCE(MAX(issue_number),0) FROM issues WHERE project_dir=?", projectDir).Scan(&maxNum)
+	tagsJSON := marshalIssueTags(tags)
 
 	result, err := d.Exec(
-		"INSERT INTO issues (project_dir, issue_number, date, title, status, content, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, created_at, updated_at) VALUES (?,?,?,?,'pending',?,'','','','','[]','','','',?,?,?)",
-		projectDir, maxNum+1, date, title, content, parentID, now, now)
+		"INSERT INTO issues (project_dir, issue_number, date, title, status, content, tags, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, created_at, updated_at) VALUES (?,?,?,?,'pending',?,?,'','','','','[]','','','',?,?,?)",
+		projectDir, maxNum+1, date, title, content, tagsJSON, parentID, now, now)
 	if err != nil {
 		return nil, false, err
 	}
@@ -212,6 +214,9 @@ func (d *DB) UpdateIssue(id int, projectDir string, fields map[string]interface{
 			"root_cause", "solution", "test_result", "notes", "feature_id":
 			sets = append(sets, k+"=?")
 			args = append(args, v)
+		case "tags":
+			sets = append(sets, "tags=?")
+			args = append(args, marshalIssueTagsValue(v))
 		case "files_changed":
 			switch val := v.(type) {
 			case string:
@@ -252,9 +257,9 @@ func (d *DB) ArchiveIssue(id int, projectDir string) error {
 	now := time.Now().Format(time.RFC3339)
 
 	_, err = d.Exec(
-		"INSERT INTO issues_archive (project_dir, issue_number, date, title, content, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, status, original_issue_id, archived_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		"INSERT INTO issues_archive (project_dir, issue_number, date, title, content, tags, description, investigation, root_cause, solution, files_changed, test_result, notes, feature_id, parent_id, status, original_issue_id, archived_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 		issue.ProjectDir, issue.IssueNumber, issue.Date, issue.Title, issue.Content,
-		issue.Description, issue.Investigation, issue.RootCause, issue.Solution,
+		marshalIssueTags(issue.Tags), issue.Description, issue.Investigation, issue.RootCause, issue.Solution,
 		issue.FilesChanged, issue.TestResult, issue.Notes, issue.FeatureID,
 		issue.ParentID, issue.Status, issue.ID, now, issue.CreatedAt)
 	if err != nil {
@@ -340,6 +345,8 @@ func scanIssues(rows *sql.Rows) []Issue {
 				issue.Status = s
 			case "content":
 				issue.Content = s
+			case "tags":
+				issue.Tags = unmarshalIssueTags(s)
 			case "description":
 				issue.Description = s
 			case "investigation":
@@ -372,4 +379,46 @@ func scanIssues(rows *sql.Rows) []Issue {
 		issues = []Issue{}
 	}
 	return issues
+}
+
+func marshalIssueTags(tags []string) string {
+	if len(tags) == 0 {
+		return "[]"
+	}
+	data, _ := json.Marshal(tags)
+	return string(data)
+}
+
+func marshalIssueTagsValue(value interface{}) string {
+	switch v := value.(type) {
+	case nil:
+		return "[]"
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return "[]"
+		}
+		return v
+	case []string:
+		return marshalIssueTags(v)
+	default:
+		data, _ := json.Marshal(v)
+		if string(data) == "null" || len(data) == 0 {
+			return "[]"
+		}
+		return string(data)
+	}
+}
+
+func unmarshalIssueTags(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return []string{}
+	}
+	var tags []string
+	if err := json.Unmarshal([]byte(raw), &tags); err != nil {
+		return []string{}
+	}
+	if tags == nil {
+		return []string{}
+	}
+	return tags
 }

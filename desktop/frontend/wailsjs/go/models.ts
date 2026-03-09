@@ -83,6 +83,7 @@ export namespace db {
 	    title: string;
 	    status: string;
 	    content: string;
+	    tags: string[];
 	    description: string;
 	    investigation: string;
 	    root_cause: string;
@@ -109,6 +110,7 @@ export namespace db {
 	        this.title = source["title"];
 	        this.status = source["status"];
 	        this.content = source["content"];
+	        this.tags = source["tags"];
 	        this.description = source["description"];
 	        this.investigation = source["investigation"];
 	        this.root_cause = source["root_cause"];
@@ -446,4 +448,3 @@ export namespace settings {
 	}
 
 }
-

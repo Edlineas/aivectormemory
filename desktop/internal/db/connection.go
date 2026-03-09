@@ -65,6 +65,7 @@ var coreTables = []string{
 		title TEXT NOT NULL,
 		status TEXT NOT NULL DEFAULT 'pending',
 		content TEXT NOT NULL DEFAULT '',
+		tags TEXT NOT NULL DEFAULT '[]',
 		description TEXT NOT NULL DEFAULT '',
 		investigation TEXT NOT NULL DEFAULT '',
 		root_cause TEXT NOT NULL DEFAULT '',
@@ -85,6 +86,7 @@ var coreTables = []string{
 		date TEXT NOT NULL,
 		title TEXT NOT NULL,
 		content TEXT NOT NULL DEFAULT '',
+		tags TEXT NOT NULL DEFAULT '[]',
 		description TEXT NOT NULL DEFAULT '',
 		investigation TEXT NOT NULL DEFAULT '',
 		root_cause TEXT NOT NULL DEFAULT '',
@@ -180,6 +182,10 @@ func Open(dbPath string) (*DB, error) {
 			return nil, fmt.Errorf("init schema: %w", err)
 		}
 	}
+	if err := ensureIssueTagColumns(conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("migrate issue tags columns: %w", err)
+	}
 	for _, idx := range coreIndexes {
 		conn.Exec(idx) // indexes are non-fatal
 	}
@@ -221,4 +227,47 @@ func (d *DB) Begin() (*sql.Tx, error) {
 
 func (d *DB) UnlockAfterTx() {
 	d.mu.Unlock()
+}
+
+func ensureIssueTagColumns(conn *sql.DB) error {
+	for _, table := range []string{"issues", "issues_archive"} {
+		exists, err := columnExists(conn, table, "tags")
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+		if _, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'", table)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func columnExists(conn *sql.DB, table, column string) (bool, error) {
+	rows, err := conn.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			columnType string
+			notNull    int
+			defaultVal sql.NullString
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &primaryKey); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+
+	return false, rows.Err()
 }
