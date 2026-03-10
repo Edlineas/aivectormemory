@@ -13,6 +13,22 @@ wails dev
 
 The desktop shell embeds `frontend/dist` in production and binds Go methods from [`app.go`](./app.go) into the Vue frontend.
 
+## Test
+
+Run desktop Go tests with:
+
+```bash
+cd desktop
+go test ./...
+```
+
+If the default `https://proxy.golang.org` is unreachable in your network, use a reachable proxy fallback:
+
+```bash
+cd desktop
+GOPROXY=https://goproxy.cn,direct GOSUMDB=sum.golang.google.cn go test ./...
+```
+
 ## Build
 
 For a complete macOS DMG build, prefer the wrapper script:
