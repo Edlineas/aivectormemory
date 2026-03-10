@@ -33,8 +33,8 @@ class IssueRepo(BaseRepo):
         ).fetchone()
         return self._normalize_issue(row)
 
-    def create(self, date: str, title: str, content: str = "", tags: list[str] | None = None,
-               memory_id: str = "", parent_id: int = 0) -> dict:
+    def create(self, date: str, title: str, content: str = "", memory_id: str = "",
+               parent_id: int = 0, tags: list[str] | None = None) -> dict:
         # 去重：同项目 + 同标题 + 未归档 → 返回已有记录
         existing = self.conn.execute(
             "SELECT * FROM issues WHERE project_dir=? AND title=? AND status!='archived'",
@@ -57,7 +57,7 @@ class IssueRepo(BaseRepo):
                                 (issue_id, self.project_dir)).fetchone()
         if not row:
             return None
-        allowed = {"title", "status", "content", "memory_id",
+        allowed = {"title", "status", "content", "tags", "memory_id",
                    "description", "investigation", "root_cause", "solution",
                    "files_changed", "test_result", "notes", "feature_id", "tags"}
         updates = {k: v for k, v in fields.items() if k in allowed}
@@ -257,4 +257,3 @@ class IssueRepo(BaseRepo):
         if "tags" in issue:
             issue["tags"] = self._normalize_tags(issue.get("tags"))
         return issue
-

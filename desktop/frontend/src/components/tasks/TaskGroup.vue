@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n'
 import TaskNode from './TaskNode.vue'
+import Badge from '../common/Badge.vue'
 
 const { t } = useI18n()
 
@@ -20,9 +21,18 @@ const emit = defineEmits<{
 }>()
 
 function progress() {
+  if (props.group.total != null) return `${props.group.done || 0}/${props.group.total}`
   const items = props.group.tasks || []
   const done = items.filter((t: any) => t.status === 'done' || t.status === 'completed').length
   return `${done}/${items.length}`
+}
+
+function groupStatus(): { label: string; type: 'success' | 'info' | 'warning' } {
+  const d = props.group.done || 0
+  const tot = props.group.total || props.group.tasks?.length || 0
+  if (d === tot && tot > 0) return { label: t('status.completed'), type: 'success' }
+  if (d > 0) return { label: t('status.in_progress'), type: 'info' }
+  return { label: t('status.pending'), type: 'warning' }
 }
 </script>
 
@@ -31,9 +41,10 @@ function progress() {
     <div :class="['task-group-header', collapsed && 'collapsed']" @click="emit('toggle-collapse')">
       <span class="task-group-toggle">&#x25BC;</span>
       <span class="task-group-title">{{ group.feature_id || group.title }}</span>
-      <span class="task-group-progress">{{ progress() }}</span>
       <span v-if="group.created_at" class="task-group-date">{{ group.created_at?.slice(0, 10) }}</span>
       <div class="task-group-header-right" @click.stop>
+        <span class="task-group-progress">{{ progress() }}</span>
+        <Badge :type="groupStatus().type">{{ groupStatus().label }}</Badge>
         <template v-if="!readonly">
           <button class="btn btn--ghost btn--sm task-actions-group" @click="emit('add-task')">{{ t('addTask') }}</button>
           <button class="btn btn--ghost-danger btn--sm task-actions-group" @click="emit('delete-group')">{{ t('delete') }}</button>

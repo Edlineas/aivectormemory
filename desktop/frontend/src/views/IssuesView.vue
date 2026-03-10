@@ -161,7 +161,7 @@ async function openView(issue: any) {
     <div class="card-list">
       <IssueCard
         v-for="issue in issues"
-        :key="issue.issue_number"
+        :key="issue.id"
         :issue="issue"
         @edit="openEdit"
         @archive="openArchive"

@@ -179,7 +179,6 @@ func (d *DB) GetIssueDetail(id int, projectDir string) (*Issue, error) {
 	if len(issues) > 0 {
 		return &issues[0], nil
 	}
-
 	return nil, fmt.Errorf("issue not found: %d", id)
 }
 
@@ -190,7 +189,6 @@ func (d *DB) CreateIssue(projectDir, title, content, status string, tags []strin
 	if status == "" {
 		status = "pending"
 	}
-
 	date := time.Now().Format("2006-01-02")
 	now := time.Now().Format(time.RFC3339)
 
@@ -237,11 +235,11 @@ func (d *DB) UpdateIssue(id int, projectDir string, fields map[string]interface{
 		case "files_changed":
 			switch val := v.(type) {
 			case string:
-				sets = append(sets, "files_changed=?")
+				sets = append(sets, k+"=?")
 				args = append(args, val)
 			default:
 				b, _ := json.Marshal(val)
-				sets = append(sets, "files_changed=?")
+				sets = append(sets, k+"=?")
 				args = append(args, string(b))
 			}
 		}

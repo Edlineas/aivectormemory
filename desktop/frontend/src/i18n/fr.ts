@@ -67,7 +67,7 @@ export default {
   appearance: 'Apparence', themeDark: 'Sombre', themeLight: 'Clair', themeSystem: 'Systeme', language: 'Langue',
   dataSettings: 'Donnees', pythonPath: 'Chemin Python', autoDetected: 'Auto-detecte', webDashboard: 'Tableau de Bord Web', port: 'Port',
   system: 'Systeme', autoStart: 'Lancer au Demarrage', about: 'A Propos', version: 'Version',
-  launchWebDashboard: 'Lancer le Tableau de Bord Web', stopWebDashboard: 'Arreter le Tableau de Bord Web',
+  launchWebDashboard: 'Lancer le Tableau de Bord Web', stopWebDashboard: 'Arreter le Tableau de Bord Web', openWebDashboard: 'Ouvrir le Tableau de Bord',
   webDashboardRunning: 'Tableau de Bord Web en Cours', webDashboardStopped: 'Tableau de Bord Web Arrete',
   selectAll: 'Tout Selectionner', batchDeleteMemories: 'Suppression Groupee', confirmBatchDelete: 'Supprimer {n} memoires selectionnees ?',
   auth: {

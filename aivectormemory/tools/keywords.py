@@ -39,7 +39,7 @@ def extract_keywords(content: str, max_kw: int = 5) -> list[str]:
         lw = w.lower()
         if len(result) >= max_kw:
             break
-        if lw not in _EN_STOP and lw not in seen:
+        if len(lw) <= 30 and lw not in _EN_STOP and lw not in seen:
             seen.add(lw)
             result.append(w)
 

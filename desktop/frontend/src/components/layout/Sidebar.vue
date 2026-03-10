@@ -72,7 +72,7 @@ async function toggleWebDashboard() {
         <circle cx="22" cy="16" r="3" fill="currentColor"/>
         <circle cx="14" cy="24" r="2.5" fill="currentColor"/>
       </svg>
-      AVM Router
+      AIVectorMemory
     </a>
 
     <ul class="nav-list">

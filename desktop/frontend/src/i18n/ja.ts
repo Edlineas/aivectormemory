@@ -67,7 +67,7 @@ export default {
   appearance: '外観', themeDark: 'ダーク', themeLight: 'ライト', themeSystem: 'システム', language: '言語',
   dataSettings: 'データ', pythonPath: 'Pythonパス', autoDetected: '自動検出', webDashboard: 'Webダッシュボード', port: 'ポート',
   system: 'システム', autoStart: 'ログイン時に起動', about: 'バージョン情報', version: 'バージョン',
-  launchWebDashboard: 'Webダッシュボードを起動', stopWebDashboard: 'Webダッシュボードを停止',
+  launchWebDashboard: 'Webダッシュボードを起動', stopWebDashboard: 'Webダッシュボードを停止', openWebDashboard: 'ダッシュボードを開く',
   webDashboardRunning: 'Webダッシュボード稼働中', webDashboardStopped: 'Webダッシュボード停止中',
   selectAll: 'すべて選択', batchDeleteMemories: '一括削除', confirmBatchDelete: '選択した {n} 件の記憶を削除しますか？',
   auth: {

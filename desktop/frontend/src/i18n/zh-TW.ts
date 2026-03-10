@@ -203,6 +203,7 @@ export default {
   version: '版本',
   launchWebDashboard: '啟動 Web 看板',
   stopWebDashboard: '停止 Web 看板',
+  openWebDashboard: '打開看板',
   webDashboardRunning: 'Web 看板運行中',
   webDashboardStopped: 'Web 看板已停止',
   selectAll: '全選',

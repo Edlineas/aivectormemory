@@ -67,7 +67,7 @@ export default {
   appearance: 'Erscheinungsbild', themeDark: 'Dunkel', themeLight: 'Hell', themeSystem: 'System', language: 'Sprache',
   dataSettings: 'Daten', pythonPath: 'Python-Pfad', autoDetected: 'Automatisch erkannt', webDashboard: 'Web-Dashboard', port: 'Port',
   system: 'System', autoStart: 'Beim Anmelden starten', about: 'Uber', version: 'Version',
-  launchWebDashboard: 'Web-Dashboard Starten', stopWebDashboard: 'Web-Dashboard Stoppen',
+  launchWebDashboard: 'Web-Dashboard Starten', stopWebDashboard: 'Web-Dashboard Stoppen', openWebDashboard: 'Dashboard Öffnen',
   webDashboardRunning: 'Web-Dashboard Lauft', webDashboardStopped: 'Web-Dashboard Gestoppt',
   selectAll: 'Alle Auswahlen', batchDeleteMemories: 'Stapel Loschen', confirmBatchDelete: '{n} ausgewahlte Erinnerungen loschen?',
   auth: {

@@ -86,6 +86,8 @@ export function Logout(arg1:string):Promise<void>;
 
 export function MergeTags(arg1:string,arg2:Array<string>,arg3:string):Promise<number>;
 
+export function OpenWebDashboard():Promise<void>;
+
 export function RebuildAllEmbeddings():Promise<void>;
 
 export function Register(arg1:string,arg2:string):Promise<void>;

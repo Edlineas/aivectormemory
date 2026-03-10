@@ -166,6 +166,10 @@ export function MergeTags(arg1, arg2, arg3) {
   return window['go']['main']['App']['MergeTags'](arg1, arg2, arg3);
 }
 
+export function OpenWebDashboard() {
+  return window['go']['main']['App']['OpenWebDashboard']();
+}
+
 export function RebuildAllEmbeddings() {
   return window['go']['main']['App']['RebuildAllEmbeddings']();
 }

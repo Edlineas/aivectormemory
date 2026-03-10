@@ -215,6 +215,7 @@ export default {
   version: 'Version',
   launchWebDashboard: 'Launch Web Dashboard',
   stopWebDashboard: 'Stop Web Dashboard',
+  openWebDashboard: 'Open Dashboard',
   webDashboardRunning: 'Web Dashboard Running',
   webDashboardStopped: 'Web Dashboard Stopped',
   selectAll: 'Select All',

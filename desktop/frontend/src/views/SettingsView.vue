@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/auth'
 import { LANGS } from '../i18n'
 import {
   DetectPython, SetAutoStart, SetLanguage,
-  LaunchWebDashboard, StopWebDashboard, IsWebDashboardRunning,
+  LaunchWebDashboard, StopWebDashboard, IsWebDashboardRunning, OpenWebDashboard,
   HealthCheck, GetDBStats, RepairMissingEmbeddings, RebuildAllEmbeddings,
   BackupDB, RestoreDB, ListBackups,
 } from '../../wailsjs/go/main/App'
@@ -76,6 +76,10 @@ async function toggleWebDashboard() {
       window.__toast?.show(t('webDashboardRunning'), 'success')
     }
   } catch (e: any) { window.__toast?.show(e?.message || 'Failed', 'error') }
+}
+
+async function openDashboard() {
+  try { await OpenWebDashboard() } catch (e: any) { window.__toast?.show(e?.message || 'Failed', 'error') }
 }
 
 async function doLogout() {
@@ -175,6 +179,9 @@ function formatSize(bytes: number): string {
         <label class="settings-label">{{ t('webDashboard') }}</label>
         <button class="btn" :class="webDashboardRunning ? 'btn--danger' : 'btn--primary'" @click="toggleWebDashboard">
           {{ webDashboardRunning ? t('stopWebDashboard') : t('launchWebDashboard') }}
+        </button>
+        <button v-if="webDashboardRunning" class="btn btn--primary" style="margin-left: 8px" @click="openDashboard">
+          {{ t('openWebDashboard') }}
         </button>
       </div>
     </section>

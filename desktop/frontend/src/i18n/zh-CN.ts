@@ -218,6 +218,7 @@ export default {
   // Desktop-specific: Web Dashboard
   launchWebDashboard: '启动 Web 看板',
   stopWebDashboard: '停止 Web 看板',
+  openWebDashboard: '打开看板',
   webDashboardRunning: 'Web 看板运行中',
   webDashboardStopped: 'Web 看板已停止',
   // Desktop-specific: Batch operations

@@ -26,7 +26,7 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const AppVersion = "1.0.14"
+const AppVersion = "1.0.16"
 
 type App struct {
 	ctx        context.Context
@@ -94,6 +94,13 @@ func (a *App) shutdown(ctx context.Context) {
 	a.clearRuntime()
 }
 
+func (a *App) ensureDB() error {
+	if a.database == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return nil
+}
+
 // ============== Projects ==============
 
 func (a *App) GetProjects() ([]db.Project, error) {
@@ -125,7 +132,6 @@ func (a *App) GetStats(projectDir string) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// Memory counts
 	projResult, _ := database.GetMemories("project", projectDir, "", "", "", 1, 0)
 	userResult, _ := database.GetMemories("user", "", "", "", "", 1, 0)
@@ -512,6 +518,15 @@ func (a *App) IsWebDashboardRunning() bool {
 		return false
 	}
 	return a.launcher.IsRunning()
+}
+
+func (a *App) OpenWebDashboard() error {
+	port := a.settings.WebPort
+	if port == 0 {
+		port = 9080
+	}
+	url := fmt.Sprintf("http://localhost:%d", port)
+	return exec.Command("open", url).Start()
 }
 
 // ============== Settings ==============

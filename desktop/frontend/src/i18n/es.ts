@@ -67,7 +67,7 @@ export default {
   appearance: 'Apariencia', themeDark: 'Oscuro', themeLight: 'Claro', themeSystem: 'Sistema', language: 'Idioma',
   dataSettings: 'Datos', pythonPath: 'Ruta de Python', autoDetected: 'Auto-detectado', webDashboard: 'Panel Web', port: 'Puerto',
   system: 'Sistema', autoStart: 'Iniciar al Arrancar', about: 'Acerca de', version: 'Version',
-  launchWebDashboard: 'Iniciar Panel Web', stopWebDashboard: 'Detener Panel Web',
+  launchWebDashboard: 'Iniciar Panel Web', stopWebDashboard: 'Detener Panel Web', openWebDashboard: 'Abrir Panel Web',
   webDashboardRunning: 'Panel Web en Ejecucion', webDashboardStopped: 'Panel Web Detenido',
   selectAll: 'Seleccionar Todo', batchDeleteMemories: 'Eliminacion Masiva', confirmBatchDelete: 'Eliminar {n} memorias seleccionadas?',
   auth: {

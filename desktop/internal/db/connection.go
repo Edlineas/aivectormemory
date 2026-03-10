@@ -190,6 +190,11 @@ func Open(dbPath string) (*DB, error) {
 		conn.Exec(idx) // indexes are non-fatal
 	}
 
+	// Migrate: add tags column to issues/issues_archive if missing
+	for _, tbl := range []string{"issues", "issues_archive"} {
+		conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'", tbl))
+	}
+
 	return &DB{conn: conn}, nil
 }
 
