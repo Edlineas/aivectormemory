@@ -1,5 +1,6 @@
 # CHANGELOG
 
+- [2026-03-10 17:00] FIX: 新增根级 go.work 以挂载 desktop 子模块，修复编辑器无法解析 Wails 依赖的导入报错 (Files: go.work, CHANGELOG.md)
 - [2026-03-10 13:31] CHORE: 同步 upstream/main 并解决 CLI UTF-8、Issue tags 与桌面运行时相关合并冲突 (Files: aivectormemory/__main__.py, aivectormemory/db/issue_repo.py, aivectormemory/db/migrations/v11.py, desktop/app.go, desktop/internal/db/issues.go, CHANGELOG.md)
 - [2026-03-10 02:41] FIX: 修复 CLI 在标准流 encoding 缺失时的启动崩溃，并补充 uv 虚拟环境回归测试入口 (Files: aivectormemory/__main__.py, pyproject.toml, uv.lock, tests/test_main_stdio.py, CHANGELOG.md)
 - [2026-03-10 02:20] FIX: 收紧 onnxruntime 版本上限，修复 CPython 3.10 在 uv sync 下无法解依赖的问题 (Files: pyproject.toml, CHANGELOG.md)
